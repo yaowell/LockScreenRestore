@@ -27,7 +27,7 @@ static NSString *const kLSRPrefsPaths[] = {
 };
 static BOOL sLSRClockEnabled = YES;
 
-// 强制开启日志输出（已移除 #ifdef DEBUG 限制）
+// 强制开启日志输出
 static void LSRDebugLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
 static void LSRDebugLog(NSString *format, ...) {
     va_list args;
@@ -626,7 +626,7 @@ static UIView *LSRFocusIndicator(UIView *focusView) {
 
 %end // LSRFocus
 
-#pragma mark - Group: iOS 15 notifications (Listed from the top + Debug Logs)
+#pragma mark - Group: iOS 15 notifications (Listed from the top + Fixed Un-collapsible Bug)
 
 static const CGFloat kIOS15CardCornerRadius = 13.0;
 static const CGFloat kIOS15CardInsetReduction = 4.0;
@@ -704,14 +704,14 @@ static void LSRApplyHistoryHeaderReveal(NCNotificationListView *list) {
 }
 
 - (void)setRevealPercentage:(CGFloat)percentage {
-    LSRDebugLog(@"[Debug] NCNotificationListView setRevealPercentage: %.2f", percentage);
     %orig;
     LSRApplyHistoryHeaderReveal(self);
 }
 
+// 核心修改点：把旧通知随下拉自动收回的 Bug 特性变为固定标准行为（强制恒等于 YES）
 - (void)setRevealed:(BOOL)revealed {
-    LSRDebugLog(@"[Debug] NCNotificationListView setRevealed: %d", revealed);
-    %orig(revealed);
+    LSRDebugLog(@"[LSR Fix] Intercepted setRevealed: %d -> Forced to YES", revealed);
+    %orig(YES);
     LSRApplyHistoryHeaderReveal(self);
 }
 %end
