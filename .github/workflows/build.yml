@@ -1,0 +1,135 @@
+name: Build Dual Debs (Roothide & Rootless)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          brew install ldid
+
+      - name: Clone Roothide Theos and SDKs
+        run: |
+          git clone --recursive https://github.com/roothide/theos.git $HOME/theos
+          rm -rf $HOME/theos/sdks
+          git clone --depth=1 https://github.com/theos/sdks.git $HOME/theos/sdks
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      - name: Install AltList
+        run: |
+          git clone --depth=1 https://github.com/opa334/AltList.git $HOME/AltList
+          chmod +x $HOME/AltList/install_to_theos.sh
+          cd $HOME/AltList
+          ./install_to_theos.sh
+
+      - name: Install Cephei Framework
+        run: |
+          echo "========================================"
+          echo "Installing Cephei to Theos"
+          echo "========================================"
+          git clone --depth=1 https://github.com/hbang/libcephei.git $HOME/libcephei
+          mkdir -p $HOME/theos/include/Cephei
+          cp -R $HOME/libcephei/Cephei/*.h $HOME/theos/include/Cephei/ || true
+          cp -R $HOME/libcephei/CepheiPrefs/*.h $HOME/theos/include/CepheiPrefs/ || true
+
+      - name: Locate Preferences Framework
+        run: |
+          echo "========================================"
+          echo "Searching Theos for Preferences.framework"
+          echo "========================================"
+
+          PREFS_FRAMEWORK=$(find "$HOME/theos" \
+            -type d \
+            -name "Preferences.framework" \
+            -print \
+            -quit)
+
+          if [ -n "$PREFS_FRAMEWORK" ]; then
+            echo "Found in Theos:"
+            echo "$PREFS_FRAMEWORK"
+          else
+            echo "Not found in Theos."
+            echo "Searching Xcode SDKs..."
+
+            PREFS_FRAMEWORK=$(find \
+              "/Applications/Xcode.app/Contents/Developer/Platforms" \
+              -type d \
+              -name "Preferences.framework" \
+              -print \
+              -quit 2>/devnull || true)
+          fi
+
+          if [ -z "$PREFS_FRAMEWORK" ]; then
+            echo "ERROR: Preferences.framework was not found."
+            echo ""
+            echo "Theos:"
+            find "$HOME/theos" -type d -iname "*Preferences*" -print || true
+            echo ""
+            echo "Xcode:"
+            find "/Applications/Xcode.app/Contents/Developer/Platforms" \
+              -type d \
+              -iname "*Preferences*" \
+              -print 2>/devnull || true
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "Using:"
+          echo "$PREFS_FRAMEWORK"
+          echo "========================================"
+
+          mkdir -p "$HOME/theos/lib/iphone"
+          rm -rf "$HOME/theos/lib/iphone/Preferences.framework"
+          cp -R "$PREFS_FRAMEWORK" "$HOME/theos/lib/iphone/Preferences.framework"
+
+          echo "Installed Preferences.framework:"
+          ls -la "$HOME/theos/lib/iphone/Preferences.framework"
+
+      - name: Verify AltList and Preferences Installation
+        run: |
+          echo "========================================"
+          echo "Checking AltList & Preferences installation"
+          echo "========================================"
+
+          find "$HOME/theos" \
+            \( -iname "*AltList*" -o -iname "AltList.framework" \) \
+            -print || true
+
+          echo ""
+          echo "Checking Preferences:"
+          ls -la "$HOME/theos/lib/iphone/Preferences.framework" || true
+
+      - name: Build Roothide Package
+        run: |
+          make clean package \
+            THEOS_PACKAGE_SCHEME=roothide \
+            SYSROOT=$HOME/theos/sdks/iPhoneOS16.5.sdk \
+            FINALPACKAGE=1
+
+      - name: Build Rootless Package
+        run: |
+          make clean package \
+            THEOS_PACKAGE_SCHEME=rootless \
+            SYSROOT=$HOME/theos/sdks/iPhoneOS16.5.sdk \
+            FINALPACKAGE=1
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: LockScreenRestore-Debs
+          path: packages/*.deb
