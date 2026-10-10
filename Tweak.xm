@@ -27,15 +27,13 @@ static NSString *const kLSRPrefsPaths[] = {
 };
 static BOOL sLSRClockEnabled = YES;
 
-// Debug builds log to LockScreenRestoreDebug.log.
-#ifdef DEBUG
+// 强制开启日志输出（已移除 #ifdef DEBUG 限制）
 static void LSRDebugLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
 static void LSRDebugLog(NSString *format, ...) {
     va_list args;
     va_start(args, format);
     NSString *line = [NSString stringWithFormat:@"%.2f %@\n", CACurrentMediaTime(), [[NSString alloc] initWithFormat:format arguments:args]];
     va_end(args);
-    // MediaRemoteUI is sandboxed: its log goes to its own tmp folder.
     BOOL springBoard = [[NSProcessInfo processInfo].processName isEqualToString:@"SpringBoard"];
     NSString *path = [springBoard ? @"/var/mobile/Documents" : NSTemporaryDirectory()
         stringByAppendingPathComponent:@"LockScreenRestoreDebug.log"];
@@ -48,9 +46,6 @@ static void LSRDebugLog(NSString *format, ...) {
     [fh writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
     [fh closeFile];
 }
-#else
-#define LSRDebugLog(...) do {} while (0)
-#endif
 
 @interface SBFLockScreenDateView : UIView
 + (UIFont *)timeFont;
@@ -794,7 +789,6 @@ static void LSRApplyHistoryHeaderReveal(NCNotificationListView *list) {
     }
 }
 
-// 增加对通知卡片显隐状态的调试日志
 - (void)setHidden:(BOOL)hidden {
     LSRDebugLog(@"[Debug] NCNotificationShortLookView setHidden: %d for view: %@", hidden, self);
     %orig(hidden);
